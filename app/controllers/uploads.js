@@ -4,9 +4,11 @@ const controller = require('lib/wiring/controller');
 const models = require('app/models');
 const Upload = models.upload;
 
+const superagent = require('superagent');
+
 // const authenticate = require('./concerns/authenticate');
 const middleware = require('app/middleware');
-const multer = middleware['multer'];
+const multer = middleware.multer;
 const awsS3Upload = require('lib/aws-s3-upload');
 const mime = require('mime-types');
 
@@ -33,15 +35,32 @@ const create = (req, res, next) => {
   .then((s3response) => {
     console.log(`"${req.body.upload.title}" uploaded successfully.`);
     console.log(s3response);
-    let upload = {
-      location: s3response.Location,
-      title: req.body.upload.title,
-    };
-    return Upload.create(upload);
+    let postData = JSON.stringify({
+      "url": s3response.Location
+    });
+
+    superagent
+      .post('https://api.projectoxford.ai/face/v1.0/detect?returnFaceId=true&returnFaceLandmarks=true')
+      .set('Content-Type', 'application/json')
+      .set('Ocp-Apim-Subscription-Key', 'd487f4fe54ca4889b5dbbd8bbb72b596')
+      .send(postData)
+      .end( function(err, res) {
+        if(err){
+          console.log(err);
+        }
+        console.log(res);
+        let upload = {
+          location: s3response.Location,
+          title: req.body.upload.title,
+          photo_api_data: res.body,
+        };
+       return Upload.create(upload);
+      });
+
   })
-  .then((upload) => {
-    res.status(201).json({ upload });
-  }) // add status and resolve with json
+  .then((data) => {
+    res.status(201).json({ data });
+  })
   .catch(err => next(err));
 
 };
